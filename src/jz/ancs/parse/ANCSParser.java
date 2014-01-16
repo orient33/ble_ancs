@@ -1,14 +1,11 @@
-package jz.ance.parse;
+package jz.ancs.parse;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 
-import jz.ios.ancs.R;
-
 import android.app.NotificationManager;
-import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
@@ -19,7 +16,7 @@ import android.support.v4.app.NotificationCompat;
 /** 解析 iOS的ANCS 通知中心的通知信息<br>
  *  并将此通知以android的Notification形式发到状态栏
  * */
-public class ANCSHandler {
+public class ANCSParser {
 	// ANCS constants
 	public final static int NotificationAttributeIDAppIdentifier = 0;
 	public final static int NotificationAttributeIDTitle = 1; //, (Needs to be followed by a 2-bytes max length parameter)
@@ -70,10 +67,15 @@ public class ANCSHandler {
 	/**ANCS 主服务*/
 	BluetoothGattService mService;
 	Context mContext;
-	private static ANCSHandler sInst;
+	private static ANCSParser sInst;
 	private int icon_id;
 	NotificationManager mNotificationManager;
-	private ANCSHandler(Context c,int id) {
+	
+//	static{
+//		System.loadLibrary("ancsjni");
+//	}
+	private native int add(int a, int b);
+	private ANCSParser(Context c,int id) {
 		mContext = c;
 		icon_id = id;
 		mNotificationManager = (NotificationManager) c
@@ -113,6 +115,7 @@ public class ANCSHandler {
 				}
 			}
 		};
+//		Notice.logw("JNI log , add == "+add(1,9));
 	}
 	/** 设置连接成功后的一些索引
 	 * BluetoothGattService BluetoothGatt
@@ -122,14 +125,14 @@ public class ANCSHandler {
 		mService = bgs;
 	}
 	/** 初始化一个实例*/
-	public static ANCSHandler init(Context c,int id) {
+	public static ANCSParser getDefault(Context c, int id) {
 		if (sInst == null) {
-			sInst = new ANCSHandler(c,id);
+			sInst = new ANCSParser(c, id);
 		}
 		return sInst;
 	}
 	/** 获取此单例，必须在 init()之后调用*/
-	public static ANCSHandler get() {
+	public static ANCSParser get() {
 		return sInst;
 	}
 

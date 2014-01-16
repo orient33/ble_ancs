@@ -2,10 +2,10 @@ package jz.ios.ancs;
 
 import java.util.List;
 
-import jz.ance.parse.ANCSGattCallback;
-import jz.ance.parse.ANCSGattCallback.StateListener;
-import jz.ance.parse.ANCSHandler;
-import jz.ance.parse.Notice;
+import jz.ancs.parse.ANCSGattCallback;
+import jz.ancs.parse.ANCSParser;
+import jz.ancs.parse.Notice;
+import jz.ancs.parse.ANCSGattCallback.StateListener;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -32,7 +32,7 @@ public class BLEConnect extends Activity implements StateListener{
 	
 	TextView mViewState;
 	ListView mViewMsgs;
-	ANCSHandler mANCSHandler;
+	ANCSParser mANCSHandler;
 	ANCSGattCallback mANCScb;
 	private List<Notice> mList;
 	private BaseAdapter mListAdapter = new BaseAdapter() {
@@ -70,7 +70,7 @@ public class BLEConnect extends Activity implements StateListener{
 	public void onCreate(Bundle b) {
 		super.onCreate(b);
 		setContentView(R.layout.ble_connect);
-		mANCSHandler = ANCSHandler.init(this,R.drawable.ic_launcher);
+		mANCSHandler = ANCSParser.getDefault(this,R.drawable.ic_launcher);
 		mViewState = (TextView)findViewById(R.id.ble_state);
 		mViewMsgs = (ListView)findViewById(R.id.lv);
 //		mViewMsgs.setAdapter(mListAdapter);

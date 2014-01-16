@@ -1,4 +1,4 @@
-package jz.ance.parse;
+package jz.ancs.parse;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +18,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			Connected = BluetoothProfile.STATE_CONNECTED,
 			Disconnecting=BluetoothProfile.STATE_DISCONNECTING;
 	int mState = Disconnected, mStatus;
-	ANCSHandler mANCSHandler;
+	ANCSParser mANCSHandler;
 	BluetoothGatt mBluetoothGatt;
 	BluetoothGattService mBluetoothGattService;//连 ANCS主服务
 	boolean mWriteNotiDesp;
@@ -29,7 +29,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		public void onStateChanged(String state);
 	}
 	
-	public ANCSGattCallback(Context c,ANCSHandler ancs){
+	public ANCSGattCallback(Context c,ANCSParser ancs){
 		mANCSHandler = ancs;
 	}
 	/** 添加一个监听者(监听此BLE连接的连接状态) */
@@ -226,7 +226,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 					mBluetoothGattService = svr;
 					mANCSHandler.setService(svr, mBluetoothGatt);
 					
-					ANCSHandler.get().reset();
+					ANCSParser.get().reset();
 					log("found ANCS service & character OK!");
 					return;
 				}

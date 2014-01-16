@@ -1,4 +1,4 @@
-package jz.ance.parse;
+package jz.ancs.parse;
 /**
  * a notice from iPhone ANCS<br>
  * */
