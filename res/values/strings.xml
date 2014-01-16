@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">BLE_ancs</string>
+    <string name="scan">重新扫描</string>
+	<string name="title">标题: </string>
+	<string name="subtitle">子标题: </string>
+	<string name="message">内容: </string>
+	<string name="ms">内容大小: </string>
+	<string name="date">日期: </string>
+</resources>
