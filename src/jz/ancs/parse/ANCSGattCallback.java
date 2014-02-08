@@ -144,9 +144,12 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 				/*&& mBluetoothGattService == null*/) {
 			log("start discover service: ");
 			for(StateListener sl: mStateListeners){
-				sl.onStateChanged(1,"searching Services ON iphone");
+				sl.onStateChanged(1,"searching Services ON iphone...");
 			}
 			log(" discover service:  end "+mBluetoothGatt.discoverServices());
+			for(StateListener sl: mStateListeners){
+				sl.onStateChanged(1,"search Services ON iphone OVER");
+			}
 		} else {
 //			reconnect();
 		}
@@ -168,7 +171,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		}
 		if(0==status&&mWriteNotiDesp&&mWriteNotiDespOk){
 			for (StateListener sl : mStateListeners) {
-				sl.onStateChanged(2, "connect ANCS success");
+				sl.onStateChanged(2, "connect ANCS success!");
 			}
 		}
 		if (status == BluetoothGatt.GATT_SUCCESS && mBluetoothGattService != null

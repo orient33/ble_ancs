@@ -164,7 +164,7 @@ public class Devices extends ListActivity {
 	}
 
 	private void show(final String text) {
-		Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
+//		Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
 	}
 	
 	static void log(String s){
