@@ -2,7 +2,7 @@ package jz.ancs.parse;
 /**
  * a notice from iPhone ANCS<br>
  * */
-public class Notice {
+public class IOSNotification {
 	/** the unique identifier (UID) for the iOS notification
 	 */
 	public int uid;
@@ -16,8 +16,8 @@ public class Notice {
 	public String messageSize;
 	/** the time  for the iOS notification */
 	public String date;
-	public Notice(){}
-	public Notice(String t, String s, String m, String ms, String d) {
+	public IOSNotification(){}
+	public IOSNotification(String t, String s, String m, String ms, String d) {
 		title = t;
 		subtitle = s;
 		message = m;
@@ -31,7 +31,7 @@ public class Notice {
 	}
 	
 	static void log(String s){
-//		android.util.Log.i("sw2df",s);
+		android.util.Log.i("sw2df",s);
 	} 
 	static void logw(String s){
 		android.util.Log.w("sw2df",s);

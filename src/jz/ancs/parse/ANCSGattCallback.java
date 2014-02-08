@@ -21,12 +21,12 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	ANCSParser mANCSHandler;
 	BluetoothGatt mBluetoothGatt;
 	BluetoothGattService mBluetoothGattService;//连 ANCS主服务
-	boolean mWriteNotiDesp;
+	boolean mWriteNotiDesp,mWriteNotiDespOk;
 	private ArrayList<StateListener> mStateListeners=new ArrayList<StateListener>();
 	/** 连接状态的监听接口*/
 	public interface StateListener{
 		/** 连接状态改变时的回调  */
-		public void onStateChanged(String state);
+		public void onStateChanged(int type,String state);
 	}
 	
 	public ANCSGattCallback(Context c,ANCSParser ancs){
@@ -36,13 +36,14 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	public void addStateListen(StateListener sl){
 		if(!mStateListeners.contains(sl)){
 			mStateListeners.add(sl);
-			sl.onStateChanged(getState());
+			sl.onStateChanged(0,getState());
 		}
 	}
 
 	/** 不用时调用以释放资源 */
 	public void stop(){
 		log("stop connectGatt");
+		mStateListeners.clear();
 		try {
 			mBluetoothGatt.close();
 		} catch (Exception e) {
@@ -61,13 +62,13 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		String  state="[unknown]" /*,OPresult="unknown"*/;
 		switch(mState){
 		case Disconnected:
-			state = "[Disconnected]";
+			state = "GATT [Disconnected]";
 			break;
 		case Disconnecting:
 			state ="[Disconnecting]";
 			break;
 		case Connected:
-			state = "[Connected]";
+			state = "GATT [Connected]";
 			break;
 		case Connecting:
 			state = "[Connecting]";
@@ -107,9 +108,8 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	}
 	
 	void log(String s){
-		Notice.log(s);
+		IOSNotification.log(s);
 	}
-	
 	@Override
 	public void onCharacteristicChanged(BluetoothGatt gatt,
 			BluetoothGattCharacteristic cha) {
@@ -121,7 +121,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			mANCSHandler.onNotification(data);
 		} else if (uuid.equals(GattConstant.Apple.sUUIDDataSource)) {
 			//收到来自 iphone端DS 的字节数据 data[]
-			log("收到来自 iphone端DS 的字节数据"+android.os.Process.myTid());
+			log("收到来自 iphone端DS 的字节数据 {{ Tid: "+android.os.Process.myTid());
 			byte[] data = cha.getValue();
 			mANCSHandler.onDSNotification(data);
 		} else {
@@ -140,15 +140,19 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			int newState) {
 		log("onConnectionStateChange() " + status + "  " + newState);
 		mState = newState;
-		String state = getState();
-		for(StateListener sl: mStateListeners){
-			sl.onStateChanged(state);
-		}
 		if (newState == BluetoothProfile.STATE_CONNECTED
-				&& mBluetoothGattService == null) {
-			log("discover service: " + mBluetoothGatt.discoverServices());
+				/*&& mBluetoothGattService == null*/) {
+			log("start discover service: ");
+			for(StateListener sl: mStateListeners){
+				sl.onStateChanged(1,"searching Services ON iphone");
+			}
+			log(" discover service:  end "+mBluetoothGatt.discoverServices());
 		} else {
 //			reconnect();
+		}
+		String state = getState();
+		for(StateListener sl: mStateListeners){
+			sl.onStateChanged(0,state);
 		}
 	}
 
@@ -156,7 +160,17 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	public void onDescriptorWrite(BluetoothGatt gatt,
 			BluetoothGattDescriptor descriptor, int status) {
 		log("onDescriptorWrite() " + descriptor.getUuid() + " -> "
-				+ status);
+				+ status);// 15-5 需要输入密码
+		if (15 == status) {
+			for (StateListener sl : mStateListeners) {
+				sl.onStateChanged(2, "need password");
+			}
+		}
+		if(0==status&&mWriteNotiDesp&&mWriteNotiDespOk){
+			for (StateListener sl : mStateListeners) {
+				sl.onStateChanged(2, "connect ANCS success");
+			}
+		}
 		if (status == BluetoothGatt.GATT_SUCCESS && mBluetoothGattService != null
 				&& !mWriteNotiDesp) {
 			BluetoothGattCharacteristic cha = mBluetoothGattService
@@ -169,8 +183,9 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 						.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
 				if (null != desp) {
 					desp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-					log("write descriptor2: "
-							+ mBluetoothGatt.writeDescriptor(desp));
+					boolean r=mBluetoothGatt.writeDescriptor(desp);
+					log("write descriptor2: " + r);
+					mWriteNotiDespOk=r;
 				} else {
 					log("null descriptor2");
 				}
@@ -187,6 +202,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		List<BluetoothGattService> services = gatt.getServices();
 		if (services != null) {
 			for (BluetoothGattService svr : services) {
+				log("onServicesDiscovered: "+svr.getUuid());
 				if (svr.getUuid()
 						.equals(GattConstant.Apple.sUUIDANCService)) {
 					 /*发现了 iphone 的ANCS主服务:
@@ -216,7 +232,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 							log("null ds desp");
 						}
 					}
-					mWriteNotiDesp = false;
+					mWriteNotiDespOk=mWriteNotiDesp = false;
 
 					cha = svr.getCharacteristic(GattConstant.Apple.sUUIDControl);
 					if (cha == null) {
@@ -232,7 +248,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 				}
 			}
 		}
-		log("bad service found");
-		stop();
+		log("bad service found; not find ANCS uuid");
+//		stop();
 	}
 }

@@ -2,6 +2,7 @@ package jz.ancs.parse;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -12,7 +13,6 @@ import android.bluetooth.BluetoothGattService;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
-import android.support.v4.app.NotificationCompat;
 /** 解析 iOS的ANCS 通知中心的通知信息<br>
  *  并将此通知以android的Notification形式发到状态栏
  * */
@@ -68,16 +68,16 @@ public class ANCSParser {
 	BluetoothGattService mService;
 	Context mContext;
 	private static ANCSParser sInst;
-	private int icon_id;
 	NotificationManager mNotificationManager;
 	
-//	static{
-//		System.loadLibrary("ancsjni");
-//	}
-	private native int add(int a, int b);
+	private ArrayList<onIOSNotification> mListeners=new ArrayList<onIOSNotification>(); 
+	public interface onIOSNotification{
+		void onIOSNotificationAdd(IOSNotification n);
+		void onIOSNotificationRemove(int uid);
+	}
+	
 	private ANCSParser(Context c,int id) {
 		mContext = c;
-		icon_id = id;
 		mNotificationManager = (NotificationManager) c
 				.getSystemService(Context.NOTIFICATION_SERVICE);
 		mHandler = new Handler(c.getMainLooper()) {
@@ -89,7 +89,7 @@ public class ANCSParser {
 						return;
 					}
 					if (System.currentTimeMillis() >= mCurData.timeExpired) {
-						Notice.loge("msg timeout !");
+						IOSNotification.loge("msg timeout !");
 					}
 				} else if (MSG_ADD_NOTIFICATION == what) {
 					mPendingNotifcations.add(new ANCSData((byte[]) msg.obj));
@@ -103,20 +103,26 @@ public class ANCSParser {
 					mHandler.removeMessages(MSG_ERR);
 					mPendingNotifcations.clear();
 					mCurData = null;
-					Notice.log("ANCSHandler reseted");
+					IOSNotification.log("ANCSHandler reseted");
 				} else if (MSG_ERR == what) {
-					Notice.log("error, skip cur data");
+					IOSNotification.log("error, skip cur data");
 					mCurData.clear();
 					mCurData = null;
 					mHandler.sendEmptyMessage(MSG_DO_NOTIFICATION);
 				} else if (MSG_FINISH == what) {
-					Notice.log("msg  data.finish()");
+					IOSNotification.log("msg  data.finish()");
 					mCurData.finish();
 				}
 			}
 		};
 //		Notice.logw("JNI log , add == "+add(1,9));
 	}
+	
+	public void listenIOSNotification(onIOSNotification lis){
+		if(!mListeners.contains(lis))
+			mListeners.add(lis);
+	}
+	
 	/** 设置连接成功后的一些索引
 	 * BluetoothGattService BluetoothGatt
 	 * */
@@ -136,17 +142,23 @@ public class ANCSParser {
 		return sInst;
 	}
 
-	private void sendNotification(final Notice noti) {
-		Notice.log("[Add Notification] : "+noti.uid);
-		NotificationCompat.Builder build  = new NotificationCompat.Builder(mContext)
-	    .setSmallIcon(icon_id)
-	    .setContentTitle(noti.title)
-	    .setContentText(noti.message);
-		mNotificationManager.notify(noti.uid, build.build());
+	private void sendNotification(final IOSNotification noti) {
+		IOSNotification.log("[Add Notification] : "+noti.uid);
+		for(onIOSNotification lis: mListeners){
+			lis.onIOSNotificationAdd(noti);
+		}
+//		NotificationCompat.Builder build  = new NotificationCompat.Builder(mContext)
+//	    .setSmallIcon(icon_id)
+//	    .setContentTitle(noti.title)
+//	    .setContentText(noti.message);
+//		mNotificationManager.notify(noti.uid, build.build());
 	}
 	private void cancelNotification(int uid){
-		Notice.log("[cancel Notification] : "+uid);
-		mNotificationManager.cancel(uid);
+		IOSNotification.log("[cancel Notification] : "+uid);
+		for(onIOSNotification lis: mListeners){
+			lis.onIOSNotificationRemove(uid);
+		}
+//		mNotificationManager.cancel(uid);
 	}
 	
 	private class ANCSData {
@@ -157,13 +169,13 @@ public class ANCSParser {
 		/** NC向NS请求此通知(notifyData)的属性<br>
 		 *  DS回复NC的此通知 属性的数据 */
 		ByteArrayOutputStream bout;
-		Notice noti;
+		IOSNotification noti;
 
 		ANCSData(byte[] data) {
 			notifyData = data;
 			curStep = 0;
 			timeExpired = System.currentTimeMillis();
-			noti=new  Notice();
+			noti=new  IOSNotification();
 		}
 
 		void clear() {
@@ -206,13 +218,13 @@ public class ANCSParser {
 			// check if finished ?
 			int cmdId = data[0]; // should be 0								//0 commandID
 			if (cmdId != 0) {
-				Notice.log("bad cmdId: " + cmdId);
+				IOSNotification.log("bad cmdId: " + cmdId);
 				return;
 			}
-			int uid = ((int) data[4] << 24) | ((int) data[3] << 16)			// 1234 是通知UID
-					| ((int) data[2] << 8) | ((int) data[1]);
+			int uid = ((0xff&data[4]) << 24) | ((0xff &data[3]) << 16)			// 1234 是通知UID
+					| ((0xff & data[2]) << 8) | ((0xff &data[1]));
 			if (uid != mCurData.getUID()) {
-				Notice.log("bad uid: " + uid + " -> " + mCurData.getUID());
+				IOSNotification.log("bad uid: " + uid + " -> " + mCurData.getUID());
 				return;
 			}
 
@@ -247,7 +259,7 @@ public class ANCSParser {
 				}
 				curIdx += attrLen;
 			}
-			Notice.log("got a notification! data size = "+data.length);
+			IOSNotification.log("got a notification! data size = "+data.length);
 			mCurData = null;
 //			mHandler.sendEmptyMessage(MSG_DO_NOTIFICATION); // continue next!
 			sendNotification(noti);
@@ -265,7 +277,7 @@ public class ANCSParser {
 			/* 首次必定到这里，从 list中取出第一个元素赋予 mCurData
 			 * */
 			mCurData = mPendingNotifcations.remove(0);
-			Notice.log("ANCS New CurData");
+			IOSNotification.log("ANCS New CurData");
 		} else if (mCurData.curStep == 0) { // parse notify data
 			/* 第二次到这里，处理data */
 			do {
@@ -273,7 +285,7 @@ public class ANCSParser {
 						|| mCurData.notifyData.length != 8) {
 					mCurData = null; // ignore
 					//不合格的ANCS的NS数据，
-					Notice.logw("ANCS Bad Head!");
+					IOSNotification.logw("ANCS Bad Head!");
 					break;
 				}
 				if(EventIDNotificationRemoved ==mCurData.notifyData[0]){
@@ -289,7 +301,7 @@ public class ANCSParser {
 				if (EventIDNotificationAdded != mCurData.notifyData[0]) {
 					//若不是add的通知，先不处理
 					mCurData = null; // ignore
-					Notice.logw("ANCS NOT Add!");
+					IOSNotification.logw("ANCS NOT Add!");
 					break;
 				}
 				// get attribute if needed!
@@ -335,7 +347,7 @@ public class ANCSParser {
 
 					cha.setValue(data);// 设置data到characteristic
 
-					Notice.log("ANCS 请求 成功？ =  "
+					IOSNotification.log("ANCS 请求 成功？ =  "
 							+ mGatt.writeCharacteristic(cha));//发起 请求
 					mCurData.curStep = 1;	//	状态(步骤设置为1)
 					mCurData.bout = new ByteArrayOutputStream();
@@ -345,7 +357,7 @@ public class ANCSParser {
 					mHandler.sendEmptyMessageDelayed(MSG_CHECK_TIME, TIMEOUT);
 					return;
 				} else {
-					Notice.logw("ANCS No Control & DS!");
+					IOSNotification.logw("ANCS No Control & DS!");
 					// has no control!// just vibrate ...
 					mCurData.bout = null;
 					mCurData.curStep = 1;
@@ -369,7 +381,7 @@ public class ANCSParser {
 	 * */
 	public void onDSNotification(byte[] data) {
 		if (mCurData == null) {
-			Notice.logw("got ds notify without cur data");
+			IOSNotification.logw("got ds notify without cur data");
 			return;
 		}
 		try {
@@ -377,16 +389,16 @@ public class ANCSParser {
 			mCurData.bout.write(data);
 			mHandler.sendEmptyMessageDelayed(MSG_FINISH, FINISH_DELAY);
 		} catch (IOException e) {
-			Notice.loge(e.toString());
+			IOSNotification.loge(e.toString());
 		}
 	}
 
 	void onWrite(BluetoothGattCharacteristic characteristic, int status) {
 		if (status != BluetoothGatt.GATT_SUCCESS) {
-			Notice.log("write err: " + status);
+			IOSNotification.log("write err: " + status);
 			mHandler.sendEmptyMessage(MSG_ERR);
 		} else {
-			Notice.log("write OK");
+			IOSNotification.log("write OK");
 			mHandler.sendEmptyMessage(MSG_DO_NOTIFICATION);
 		}
 	}
@@ -397,7 +409,7 @@ public class ANCSParser {
 	 *  */
 	public void onNotification(byte[] data) {
 		if (data == null || data.length != 8) {
-			Notice.loge("bad ANCS notification data");
+			IOSNotification.loge("bad ANCS notification data");
 			return;
 		}logD(data);
 		Message msg = mHandler.obtainMessage(MSG_ADD_NOTIFICATION);
@@ -415,7 +427,7 @@ public class ANCSParser {
 		for(int i=0;i<len;i++){
 			sb.append(d[i]+", ");
 		}
-		Notice.log("log Data size["+len+"] : "+sb);
+		IOSNotification.log("log Data size["+len+"] : "+sb);
 	}
 	
 }

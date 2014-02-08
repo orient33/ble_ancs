@@ -3,15 +3,18 @@ package jz.ios.ancs;
 import java.util.List;
 
 import jz.ancs.parse.ANCSGattCallback;
-import jz.ancs.parse.ANCSParser;
-import jz.ancs.parse.Notice;
 import jz.ancs.parse.ANCSGattCallback.StateListener;
+import jz.ancs.parse.ANCSParser;
+import jz.ancs.parse.IOSNotification;
 import android.app.Activity;
+import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothProfile;
+import android.content.Context;
 import android.os.Bundle;
+import android.support.v4.app.NotificationCompat;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -19,7 +22,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 
 
-public class BLEConnect extends Activity implements StateListener{
+public class BLEConnect extends Activity implements StateListener,ANCSParser.onIOSNotification{
 
 	public static final int Disconnected = BluetoothProfile.STATE_DISCONNECTED,
 			Connecting = BluetoothProfile.STATE_CONNECTING,
@@ -34,7 +37,7 @@ public class BLEConnect extends Activity implements StateListener{
 	ListView mViewMsgs;
 	ANCSParser mANCSHandler;
 	ANCSGattCallback mANCScb;
-	private List<Notice> mList;
+	private List<IOSNotification> mList;
 	private BaseAdapter mListAdapter = new BaseAdapter() {
 
 		@Override
@@ -55,7 +58,7 @@ public class BLEConnect extends Activity implements StateListener{
 		@Override
 		public View getView(int i, View v, ViewGroup arg2) {
 			ViewGroup vg = (ViewGroup)v;
-			Notice n = mList.get(i);
+			IOSNotification n = mList.get(i);
 			if(null == vg)
 				vg = (ViewGroup)View.inflate(BLEConnect.this, R.layout.noti_item, null);
 
@@ -86,19 +89,46 @@ public class BLEConnect extends Activity implements StateListener{
 		Devices.log("start connectGatt");
 		BluetoothDevice dev = mBluetoothAdapter.getRemoteDevice(addr);
 		mANCScb = new ANCSGattCallback(this, mANCSHandler);
+		mANCSHandler.listenIOSNotification(this);
 		BluetoothGatt btGatt = dev.connectGatt(this, true, mANCScb);
 		mANCScb.setBluetoothGatt(btGatt);
 		mANCScb.addStateListen(this);
 	}
 
 	@Override
-	public void onDestroy() {
+	public void onStop() {
 		mANCScb.stop();
-		super.onDestroy();
+		super.onStop();
+	}
+
+	private String state1="",state2="",state3="";
+	@Override
+	public void onStateChanged(final int type, final String state) {
+		this.runOnUiThread(new Runnable() {
+			public void run() {
+				if(0 == type)
+					state1=state;
+				else if(1==type)
+					state2=state;
+				else if(2==type)
+					state3=state;
+				mViewState.setText(state1+"\n"+state2+"\n"+state3);
+			}
+		});
 	}
 
 	@Override
-	public void onStateChanged(String state) {
-		mViewState.setText(state);
+	public void onIOSNotificationAdd(IOSNotification noti) {
+		NotificationCompat.Builder build = new
+		NotificationCompat.Builder(this)
+		.setSmallIcon(R.drawable.ic_launcher)
+		.setContentTitle(noti.title)
+		.setContentText(noti.message);		
+		((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).notify(noti.uid, build.build());
+	}
+
+	@Override
+	public void onIOSNotificationRemove(int uid) {
+		((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).cancel(uid);
 	}
 }
