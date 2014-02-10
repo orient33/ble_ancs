@@ -22,6 +22,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	BluetoothGatt mBluetoothGatt;
 	BluetoothGattService mBluetoothGattService;//连 ANCS主服务
 	boolean mWriteNotiDesp,mWriteNotiDespOk;
+	boolean mDisconnectReq;
 	private ArrayList<StateListener> mStateListeners=new ArrayList<StateListener>();
 	/** 连接状态的监听接口*/
 	public interface StateListener{
@@ -42,20 +43,16 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 
 	/** 不用时调用以释放资源 */
 	public void stop(){
-		log("stop connectGatt");
+		log("stop connectGatt..");
+		mDisconnectReq = true;
 		mStateListeners.clear();
-		try {
-			mBluetoothGatt.close();
-		} catch (Exception e) {
-		}
-		mBluetoothGatt = null;
-		mBluetoothGattService = null;
-		mANCSHandler.setService(mBluetoothGattService, mBluetoothGatt);
+		mBluetoothGatt.disconnect();
 	}
 
 	/** 设置btGatt， 应为 连接时 connectGatt() 的返回值为参数*/
 	public void setBluetoothGatt(BluetoothGatt BluetoothGatt) {
 		mBluetoothGatt = BluetoothGatt;
+		mDisconnectReq = false;
 	}
 	
 	private String getState() {
@@ -150,8 +147,13 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			for(StateListener sl: mStateListeners){
 				sl.onStateChanged(1,"search Services ON iphone OVER");
 			}
-		} else {
-//			reconnect();
+		} else if (0 == newState && mDisconnectReq && mBluetoothGatt != null) {
+			log("bluetoothGatt.close() ...");
+			mBluetoothGatt.close();
+			mBluetoothGatt = null;
+			mBluetoothGattService = null;
+			mANCSHandler.setService(mBluetoothGattService, mBluetoothGatt);
+			// reconnect();
 		}
 		String state = getState();
 		for(StateListener sl: mStateListeners){
@@ -164,7 +166,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			BluetoothGattDescriptor descriptor, int status) {
 		log("onDescriptorWrite() " + descriptor.getUuid() + " -> "
 				+ status);// 15-5 需要输入密码
-		if (15 == status) {
+		if (15 == status || 5 == status) {
 			for (StateListener sl : mStateListeners) {
 				sl.onStateChanged(2, "need password");
 			}

@@ -22,14 +22,14 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 public class Devices extends ListActivity {
 	public static final String TAG = "sw2df";
 	
-	private static final long SCAN_PERIOD = 10000;
+	private static final long SCAN_PERIOD = 5000;
 	private Handler mHandler= new Handler();
 	private BluetoothAdapter mBluetoothAdapter;
+	private boolean mLEscaning = false;
 	private List<BluetoothDevice> mList = new ArrayList<BluetoothDevice>();
 	private BaseAdapter mListAdapter = new BaseAdapter() {
 
@@ -115,22 +115,30 @@ public class Devices extends ListActivity {
 		getListView().setAdapter(mListAdapter);
 	}
 	
-	void scan(final boolean enable){
-		   if (enable) {
-	            // Stops scanning after a pre-defined scan period.
-	            mHandler.postDelayed(new Runnable() {
-	                @Override
-	                public void run() {
-	                    mBluetoothAdapter.stopLeScan(mLEScanCallback);
-	                }
-	            }, SCAN_PERIOD);
- 
-	    		show("开始扫描 BLE 设备...");
-	            mBluetoothAdapter.startLeScan(mLEScanCallback);
-	        } else {
-	        	show("停止扫描");
-	            mBluetoothAdapter.stopLeScan(mLEScanCallback);
-	        }
+	void scan(final boolean enable) {
+		if (enable) {
+			// Stops scanning after a pre-defined scan period.
+			mHandler.postDelayed(new Runnable() {
+				@Override
+				public void run() {
+					if (mLEscaning) {
+						mBluetoothAdapter.stopLeScan(mLEScanCallback);
+						mLEscaning = false;
+						log("停止扫描");
+					}
+				}
+			}, SCAN_PERIOD);
+
+			log("开始扫描 BLE 设备...");
+			mLEscaning = true;
+			mBluetoothAdapter.startLeScan(mLEScanCallback);
+		} else {
+			if (mLEscaning) {
+				mBluetoothAdapter.stopLeScan(mLEScanCallback);
+				mLEscaning = false;
+				log("停止扫描");
+			}
+		}
 	}
 	
 	@Override
@@ -156,7 +164,7 @@ public class Devices extends ListActivity {
 	}
 	protected void onListItemClick(ListView l, View v, int position, long id) {
 		BluetoothDevice dev = mList.get(position);
-
+		scan(false);
 		Intent intent = new Intent(this,  BLEConnect.class);
 		intent.putExtra("addr", dev.getAddress());
 		startActivity(intent);

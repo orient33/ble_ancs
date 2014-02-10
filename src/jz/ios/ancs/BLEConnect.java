@@ -91,6 +91,8 @@ public class BLEConnect extends Activity implements StateListener,ANCSParser.onI
 		mANCScb = new ANCSGattCallback(this, mANCSHandler);
 		mANCSHandler.listenIOSNotification(this);
 		BluetoothGatt btGatt = dev.connectGatt(this, true, mANCScb);
+//		Devices.log("start connectGatt..connect()");
+//		btGatt.connect();
 		mANCScb.setBluetoothGatt(btGatt);
 		mANCScb.addStateListen(this);
 	}
@@ -106,9 +108,11 @@ public class BLEConnect extends Activity implements StateListener,ANCSParser.onI
 	public void onStateChanged(final int type, final String state) {
 		this.runOnUiThread(new Runnable() {
 			public void run() {
-				if(0 == type)
+				if(0 == type){
 					state1=state;
-				else if(1==type)
+					if ("GATT [Disconnected]".equals(state))
+						state2 = state3 = "";
+				}else if(1==type)
 					state2=state;
 				else if(2==type)
 					state3=state;
