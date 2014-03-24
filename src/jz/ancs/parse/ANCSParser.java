@@ -56,7 +56,7 @@ public class ANCSParser {
 	private final static int MSG_ERR = 103;
 	private final static int MSG_CHECK_TIME = 104;
 	private final static int MSG_FINISH = 105;
-	private final static int FINISH_DELAY = 100;// 100 ms
+	private final static int FINISH_DELAY = 500;// 500 ms
 	private final static int TIMEOUT = 5 * 1000;
 
 	private List<ANCSData> mPendingNotifcations = new LinkedList<ANCSData>();
@@ -111,6 +111,7 @@ public class ANCSParser {
 					mHandler.sendEmptyMessage(MSG_DO_NOTIFICATION);
 				} else if (MSG_FINISH == what) {
 					IOSNotification.log("msg  data.finish()");
+					if(null!=mCurData)
 					mCurData.finish();
 				}
 			}

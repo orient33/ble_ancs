@@ -46,7 +46,8 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		log("stop connectGatt..");
 		mDisconnectReq = true;
 		mStateListeners.clear();
-		mBluetoothGatt.disconnect();
+		if(null!=mBluetoothGatt)
+			mBluetoothGatt.disconnect();
 	}
 
 	/** 设置btGatt， 应为 连接时 connectGatt() 的返回值为参数*/
@@ -170,7 +171,8 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			for (StateListener sl : mStateListeners) {
 				sl.onStateChanged(2, "need password");
 			}
-		}
+		}else if(133 == status)
+			Thread.dumpStack();
 		if(0==status&&mWriteNotiDesp&&mWriteNotiDespOk){
 			for (StateListener sl : mStateListeners) {
 				sl.onStateChanged(2, "connect ANCS success!");
