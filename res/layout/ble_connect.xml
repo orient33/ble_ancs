@@ -8,6 +8,12 @@
         android:background="#00ee00"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"/>
+    <CheckBox 
+        android:id="@+id/exit_service"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:checked="false"
+        android:text="@string/exit_service"/>
     <ListView
         android:id="@+id/lv"
         android:layout_width="match_parent"

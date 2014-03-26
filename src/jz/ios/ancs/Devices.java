@@ -3,6 +3,7 @@ package jz.ios.ancs;
 import java.util.ArrayList;
 import java.util.List;
 
+import jz.ancs.parse.ANCSGattCallback;
 import android.app.ListActivity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothAdapter.LeScanCallback;
@@ -10,9 +11,9 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.Menu;
@@ -20,16 +21,23 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ListView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 public class Devices extends ListActivity {
-	public static final String TAG = "sw2df";
+	public static final String TAG = "ble";
 	
-	private static final long SCAN_PERIOD = 5000;
-	private Handler mHandler= new Handler();
+	public static final String PREFS_NAME = "MyPrefsFile";
+	public static final String BleStateKey="ble_state";
+	public static final String BleAddrKey="ble_addr";
+	public static final String BleAutoKey="ble_auto_connect";
 	private BluetoothAdapter mBluetoothAdapter;
 	private boolean mLEscaning = false;
+	private Button mScanButton;
+	private CheckBox mAutoCB;
 	private List<BluetoothDevice> mList = new ArrayList<BluetoothDevice>();
 	private BaseAdapter mListAdapter = new BaseAdapter() {
 
@@ -93,13 +101,25 @@ public class Devices extends ListActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		setContentView(R.layout.activity_devices);	
+		setContentView(R.layout.activity_devices);
+		mScanButton = (Button)findViewById(R.id.scan);
+		mAutoCB = (CheckBox) findViewById(R.id.autoconnect);
+		mScanButton.setOnClickListener(new View.OnClickListener() {
+			@Override
+			public void onClick(View arg0) {
+				if(!mLEscaning){
+					mList.clear();
+					scan(true);
+				}else{
+					scan(false);
+				}
+			}
+		});
 		PackageManager pm = getPackageManager();
-		pm.checkPermission("aaa", "bbb.ccc");
 		boolean support = pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
-		log(" BLE support: "+ support);
+//		log(" BLE support: "+ support);
 		if (!support) {
-			show("此设备不支持 BLE");
+			Toast.makeText(this, "此设备不支持 BLE", Toast.LENGTH_SHORT).show();
 			finish();
 			return;
 		}
@@ -109,8 +129,21 @@ public class Devices extends ListActivity {
 		    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
 		    startActivityForResult(enableBtIntent, 1);
 		}
-		
 		mList.clear();
+		SharedPreferences sp=this.getSharedPreferences(PREFS_NAME, 0);
+		int ble_state=sp.getInt(BleStateKey, 0);
+		log("read ble state : "+ble_state);
+		if(ANCSGattCallback.BleDisconnect != ble_state){
+			boolean auto = sp.getBoolean(BleAutoKey, true);
+			String addr = sp.getString(BleAddrKey, "");
+			Intent intent = new Intent(this,  BLEConnect.class);
+			intent.putExtra("addr", addr);
+			intent.putExtra("auto", auto);
+			intent.putExtra("state", ble_state);
+			startActivity(intent);
+			finish();
+			return;
+		}
 		scan(true);
 		getListView().setAdapter(mListAdapter);
 	}
@@ -118,24 +151,15 @@ public class Devices extends ListActivity {
 	void scan(final boolean enable) {
 		if (enable) {
 			// Stops scanning after a pre-defined scan period.
-			mHandler.postDelayed(new Runnable() {
-				@Override
-				public void run() {
-					if (mLEscaning) {
-						mBluetoothAdapter.stopLeScan(mLEScanCallback);
-						mLEscaning = false;
-						log("停止扫描");
-					}
-				}
-			}, SCAN_PERIOD);
-
 			log("开始扫描 BLE 设备...");
 			mLEscaning = true;
 			mBluetoothAdapter.startLeScan(mLEScanCallback);
+			mScanButton.setText(R.string.stop_scan);
 		} else {
 			if (mLEscaning) {
 				mBluetoothAdapter.stopLeScan(mLEScanCallback);
 				mLEscaning = false;
+				mScanButton.setText(R.string.scan);
 				log("停止扫描");
 			}
 		}
@@ -167,14 +191,11 @@ public class Devices extends ListActivity {
 		scan(false);
 		Intent intent = new Intent(this,  BLEConnect.class);
 		intent.putExtra("addr", dev.getAddress());
+		intent.putExtra("auto", mAutoCB.isChecked());
 		startActivity(intent);
 		finish();
 	}
 
-	private void show(final String text) {
-//		Toast.makeText(this, text, Toast.LENGTH_SHORT).show();
-	}
-	
 	static void log(String s){
 		Log.d(TAG, "[BLE_ancs] " + s);
 	} 

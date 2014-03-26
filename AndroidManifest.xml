@@ -29,6 +29,11 @@
             </intent-filter>
         </activity>
         <activity android:name=".BLEConnect"></activity>
+		<activity android:name=".Notice"
+		    android:theme="@android:style/Theme.Dialog"></activity>
+        <service android:name=".BLEservice" >
+        </service>
+
     </application>
 
 </manifest>

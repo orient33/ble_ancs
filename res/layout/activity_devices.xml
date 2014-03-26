@@ -8,10 +8,33 @@
     android:paddingTop="@dimen/activity_vertical_margin"
     tools:context=".Devices" >
 
+    <LinearLayout
+        android:id="@+id/lay1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal" >
+
+        <Button
+            android:id="@+id/scan"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/scan" />
+
+        <CheckBox
+            android:id="@+id/autoconnect"
+            android:layout_width="0dp"
+            android:layout_weight="1" 
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/auto"/>
+    </LinearLayout>
+
     <ListView
         android:id="@android:id/list"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
+        android:layout_height="wrap_content"
+        android:layout_below="@id/lay1" >
     </ListView>
 
 </RelativeLayout>

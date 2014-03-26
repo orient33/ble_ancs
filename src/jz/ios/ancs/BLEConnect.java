@@ -1,138 +1,144 @@
 package jz.ios.ancs;
 
-import java.util.List;
-
 import jz.ancs.parse.ANCSGattCallback;
 import jz.ancs.parse.ANCSGattCallback.StateListener;
-import jz.ancs.parse.ANCSParser;
-import jz.ancs.parse.IOSNotification;
+import jz.ios.ancs.BLEservice.MyBinder;
 import android.app.Activity;
-import android.app.NotificationManager;
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
-import android.bluetooth.BluetoothProfile;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
+import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.support.v4.app.NotificationCompat;
+import android.os.IBinder;
 import android.view.View;
-import android.view.ViewGroup;
-import android.widget.BaseAdapter;
-import android.widget.ListView;
+import android.widget.CheckBox;
 import android.widget.TextView;
+import android.widget.Toast;
 
 
-public class BLEConnect extends Activity implements StateListener,ANCSParser.onIOSNotification{
-
-	public static final int Disconnected = BluetoothProfile.STATE_DISCONNECTED,
-			Connecting = BluetoothProfile.STATE_CONNECTING,
-			Connected = BluetoothProfile.STATE_CONNECTED,
-			Disconnecting=BluetoothProfile.STATE_DISCONNECTING;
-	int mState = Disconnected;
-
-	private BluetoothAdapter mBluetoothAdapter;
+public class BLEConnect extends Activity implements StateListener{
+	private static String TAG="{BleConnect....}";
+	SharedPreferences mSharedP;
 	String addr;
-	
+	boolean mAuto;	// whether connectGatt(,auto,)
+	boolean mBond;
 	TextView mViewState;
-	ListView mViewMsgs;
-	ANCSParser mANCSHandler;
-	ANCSGattCallback mANCScb;
-	private List<IOSNotification> mList;
-	private BaseAdapter mListAdapter = new BaseAdapter() {
-
-		@Override
-		public int getCount() {
-			return mList.size();
-		}
-
-		@Override
-		public Object getItem(int arg0) {
-			return null;
-		}
-
-		@Override
-		public long getItemId(int arg0) {
-			return 0;
-		}
-
-		@Override
-		public View getView(int i, View v, ViewGroup arg2) {
-			ViewGroup vg = (ViewGroup)v;
-			IOSNotification n = mList.get(i);
-			if(null == vg)
-				vg = (ViewGroup)View.inflate(BLEConnect.this, R.layout.noti_item, null);
-
-			((TextView) vg.findViewById(R.id.title)).setText(n.title);
-			((TextView) vg.findViewById(R.id.subtitle)).setText(n.subtitle);
-			((TextView) vg.findViewById(R.id.message)).setText(n.message);
-			((TextView) vg.findViewById(R.id.ms)).setText("["+n.messageSize+"]");
-			((TextView) vg.findViewById(R.id.date)).setText(n.date + "");
-			return vg;
-		}};
+	CheckBox mExitService;
+	BLEservice mBLEservice;
+	Intent mIntent;
+	int mCachedState;
+	BroadcastReceiver mBtOnOffReceiver;
 	@Override
 	public void onCreate(Bundle b) {
 		super.onCreate(b);
 		setContentView(R.layout.ble_connect);
-		mANCSHandler = ANCSParser.getDefault(this,R.drawable.ic_launcher);
 		mViewState = (TextView)findViewById(R.id.ble_state);
-		mViewMsgs = (ListView)findViewById(R.id.lv);
-//		mViewMsgs.setAdapter(mListAdapter);
-		
+		mExitService= (CheckBox)findViewById(R.id.exit_service);
 		addr = getIntent().getStringExtra("addr");
+		mAuto = getIntent().getBooleanExtra("auto", true);
+		mSharedP = getSharedPreferences(Devices.PREFS_NAME, 0);
+		if(!mAuto){
+			mViewState.setOnClickListener(new View.OnClickListener() {
+				@Override
+				public void onClick(View arg0) {
+					if (null != mBLEservice) {
+						mBLEservice.connect();
+						Toast.makeText(BLEConnect.this,
+								R.string.connect_notice, Toast.LENGTH_SHORT)
+								.show();
+					}
+				}
+			});
+		}
+		mCachedState = getIntent().getIntExtra("state", 0);
+		mIntent = new Intent(this, BLEservice.class);
+		mIntent.putExtra("addr", addr);
+		mIntent.putExtra("auto", mAuto);
+		startService(mIntent);
 		if (!BluetoothAdapter.checkBluetoothAddress(addr)) {
 			finish();
 			return;
 		}
-		mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-
-//		mList.clear();
-		Devices.log("start connectGatt");
-		BluetoothDevice dev = mBluetoothAdapter.getRemoteDevice(addr);
-		mANCScb = new ANCSGattCallback(this, mANCSHandler);
-		mANCSHandler.listenIOSNotification(this);
-		BluetoothGatt btGatt = dev.connectGatt(this, true, mANCScb);
-//		Devices.log("start connectGatt..connect()");
-//		btGatt.connect();
-		mANCScb.setBluetoothGatt(btGatt);
-		mANCScb.addStateListen(this);
+		mBtOnOffReceiver = new BroadcastReceiver() {
+			public void onReceive(Context arg0, Intent i) {
+				// action must be bt on/off .
+				int state = i.getIntExtra(BluetoothAdapter.EXTRA_STATE,
+						BluetoothAdapter.ERROR);
+				if (state != BluetoothAdapter.STATE_ON) {
+					finish();
+				}
+			}
+		};
 	}
-
+	@Override
+	public void onStart(){
+		super.onStart();
+		IntentFilter filter = new IntentFilter();
+		filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);// bt on/off
+		registerReceiver(mBtOnOffReceiver, filter);
+	}
+	@Override
+	public void onResume(){
+		super.onResume();
+		bindService(mIntent, conn, 1);
+	}
 	@Override
 	public void onStop() {
-		mANCScb.stop();
+		unregisterReceiver(mBtOnOffReceiver);
+		unbindService(conn);
+		if ( mExitService.isChecked()) {
+			stopService(mIntent);
+		}
 		super.onStop();
 	}
 
-	private String state1="",state2="",state3="";
+	ServiceConnection conn = new ServiceConnection() {
+
+		@Override
+		public void onServiceConnected(ComponentName cn, IBinder binder) {
+			log("bind onServiceConnected()"+cn);
+			MyBinder b = (MyBinder) binder;
+			mBLEservice = b.getService();
+			mBond = true;
+			startConnectGatt();
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName cn) {
+			mBond = false;
+			log(" onServiceDisconnected()+componentName="+cn);
+		}
+	};
+
+	private void startConnectGatt() {
+		if (ANCSGattCallback.BleDisconnect == mCachedState) {
+			mBLEservice.startBleConnect(addr, mAuto);
+			mBLEservice.registerStateChanged(this);
+		} else { // just display current state
+			final String str = mBLEservice.getStateDes();
+			mViewState.setText(str);
+		}
+	}
+	
 	@Override
-	public void onStateChanged(final int type, final String state) {
-		this.runOnUiThread(new Runnable() {
+	public void onStateChanged( final int state) {
+		SharedPreferences.Editor edit=mSharedP.edit();
+		edit.putInt(Devices.BleStateKey, state);
+		edit.putString(Devices.BleAddrKey, addr);
+		edit.putBoolean(Devices.BleAutoKey, mAuto);
+		edit.commit();
+//		log("put state : "+state);
+		runOnUiThread(new Runnable() {
 			public void run() {
-				if(0 == type){
-					state1=state;
-					if ("GATT [Disconnected]".equals(state))
-						state2 = state3 = "";
-				}else if(1==type)
-					state2=state;
-				else if(2==type)
-					state3=state;
-				mViewState.setText(state1+"\n"+state2+"\n"+state3);
+				mViewState.setText(mBLEservice.getStateDes() );
 			}
 		});
 	}
-
-	@Override
-	public void onIOSNotificationAdd(IOSNotification noti) {
-		NotificationCompat.Builder build = new
-		NotificationCompat.Builder(this)
-		.setSmallIcon(R.drawable.ic_launcher)
-		.setContentTitle(noti.title)
-		.setContentText(noti.message);		
-		((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).notify(noti.uid, build.build());
-	}
-
-	@Override
-	public void onIOSNotificationRemove(int uid) {
-		((NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE)).cancel(uid);
+	private void log(String s){
+		Devices.log(TAG+s);
 	}
 }

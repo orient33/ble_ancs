@@ -2,7 +2,13 @@
 <resources>
 
     <string name="app_name">BLE_ancs</string>
+    <string name="auto">自动连接</string>
     <string name="scan">重新扫描</string>
+    <string name="stop_scan">停止扫描</string>
+    <string name="exit_service">退出时停止服务</string>
+    <string name="connect_notice">连接中..</string>
+    <string name="bt_off_msg">蓝牙已关闭,若希望继续得到iPhone的即时通知，请打开蓝牙，再重新打开应用</string>
+    
 	<string name="title">标题: </string>
 	<string name="subtitle">子标题: </string>
 	<string name="message">内容: </string>

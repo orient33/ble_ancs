@@ -31,12 +31,12 @@ public class IOSNotification {
 	}
 	
 	static void log(String s){
-		android.util.Log.i("sw2df",s);
+		android.util.Log.i("ble",s);
 	} 
 	static void logw(String s){
-		android.util.Log.w("sw2df",s);
+		android.util.Log.w("ble",s);
 	} 
 	static void loge(String s){
-		android.util.Log.e("sw2df",s);
+		android.util.Log.e("ble",s);
 	} 
 }

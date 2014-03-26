@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-import android.app.NotificationManager;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
@@ -56,8 +55,8 @@ public class ANCSParser {
 	private final static int MSG_ERR = 103;
 	private final static int MSG_CHECK_TIME = 104;
 	private final static int MSG_FINISH = 105;
-	private final static int FINISH_DELAY = 500;// 500 ms
-	private final static int TIMEOUT = 5 * 1000;
+	private final static int FINISH_DELAY = 700;
+	private final static int TIMEOUT = 15 * 1000;
 
 	private List<ANCSData> mPendingNotifcations = new LinkedList<ANCSData>();
 	private Handler mHandler;
@@ -68,7 +67,6 @@ public class ANCSParser {
 	BluetoothGattService mService;
 	Context mContext;
 	private static ANCSParser sInst;
-	NotificationManager mNotificationManager;
 	
 	private ArrayList<onIOSNotification> mListeners=new ArrayList<onIOSNotification>(); 
 	public interface onIOSNotification{
@@ -76,10 +74,8 @@ public class ANCSParser {
 		void onIOSNotificationRemove(int uid);
 	}
 	
-	private ANCSParser(Context c,int id) {
+	private ANCSParser(Context c) {
 		mContext = c;
-		mNotificationManager = (NotificationManager) c
-				.getSystemService(Context.NOTIFICATION_SERVICE);
 		mHandler = new Handler(c.getMainLooper()) {
 			@Override
 			public void handleMessage(Message msg) {
@@ -116,7 +112,6 @@ public class ANCSParser {
 				}
 			}
 		};
-//		Notice.logw("JNI log , add == "+add(1,9));
 	}
 	
 	public void listenIOSNotification(onIOSNotification lis){
@@ -132,9 +127,9 @@ public class ANCSParser {
 		mService = bgs;
 	}
 	/** 初始化一个实例*/
-	public static ANCSParser getDefault(Context c, int id) {
+	public static ANCSParser getDefault(Context c) {
 		if (sInst == null) {
-			sInst = new ANCSParser(c, id);
+			sInst = new ANCSParser(c);
 		}
 		return sInst;
 	}
@@ -148,18 +143,12 @@ public class ANCSParser {
 		for(onIOSNotification lis: mListeners){
 			lis.onIOSNotificationAdd(noti);
 		}
-//		NotificationCompat.Builder build  = new NotificationCompat.Builder(mContext)
-//	    .setSmallIcon(icon_id)
-//	    .setContentTitle(noti.title)
-//	    .setContentText(noti.message);
-//		mNotificationManager.notify(noti.uid, build.build());
 	}
 	private void cancelNotification(int uid){
 		IOSNotification.log("[cancel Notification] : "+uid);
 		for(onIOSNotification lis: mListeners){
 			lis.onIOSNotificationRemove(uid);
 		}
-//		mNotificationManager.cancel(uid);
 	}
 	
 	private class ANCSData {
@@ -187,28 +176,13 @@ public class ANCSParser {
 			curStep = 0;
 		}
 
-/*
-		int getEvtId() {
-			return (notifyData[0]);
-		}
-
-		int getCategoryId() {
-			return (notifyData[2] >> 2);
-		}
-
-		int getCategoryCount() {
-			return (notifyData[3] >> 3);
-		}*/
-
 		int getUID() {
 			return (0xff & notifyData[7] << 24) | (0xff & notifyData[6] << 16)
 					| (0xff & notifyData[5] << 8) | (0xff & notifyData[4]);
 		}
 
-
 		void finish() {
 			if (null == bout) {
-
 				return;
 			}
 			//来自 DS的回复 数据
@@ -348,14 +322,13 @@ public class ANCSParser {
 
 					cha.setValue(data);// 设置data到characteristic
 
-					IOSNotification.log("ANCS 请求 成功？ =  "
+					IOSNotification.log("request ANCS the data of Notification. ？= "
 							+ mGatt.writeCharacteristic(cha));//发起 请求
 					mCurData.curStep = 1;	//	状态(步骤设置为1)
 					mCurData.bout = new ByteArrayOutputStream();
 					mCurData.timeExpired = System.currentTimeMillis() + TIMEOUT;
-
-					mHandler.removeMessages(MSG_CHECK_TIME);
-					mHandler.sendEmptyMessageDelayed(MSG_CHECK_TIME, TIMEOUT);
+//					mHandler.removeMessages(MSG_CHECK_TIME);
+//					mHandler.sendEmptyMessageDelayed(MSG_CHECK_TIME, TIMEOUT);
 					return;
 				} else {
 					IOSNotification.logw("ANCS No Control & DS!");

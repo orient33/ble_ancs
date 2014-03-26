@@ -13,21 +13,25 @@ import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 
 public class ANCSGattCallback extends BluetoothGattCallback {
-	public static final int Disconnected = BluetoothProfile.STATE_DISCONNECTED,
-			Connecting = BluetoothProfile.STATE_CONNECTING,
-			Connected = BluetoothProfile.STATE_CONNECTED,
-			Disconnecting=BluetoothProfile.STATE_DISCONNECTING;
-	int mState = Disconnected, mStatus;
+	public static final int BleDisconnect = 0;//this is same to onConnectionStateChange()'s state
+	public static final int BleAncsConnected = 10;// connected to iOS's ANCS
+	public static final int BleBuildStart = 1;//after connectGatt(), before onConnectionStateChange()
+	public static final int BleBuildConnectedGatt=2; 	//onConnectionStateChange() state==2
+	public static final int BleBuildDiscoverService=3;//discoverServices()... this block
+	public static final int BleBuildDiscoverOver=4;		//discoverServices() ok
+	public static final int BleBuildSetingANCS=5;		//settingANCS	eg. need pwd...
+	
+	public int mBleState;
+	public static 
 	ANCSParser mANCSHandler;
-	BluetoothGatt mBluetoothGatt;
+	private BluetoothGatt mBluetoothGatt;
 	BluetoothGattService mBluetoothGattService;//连 ANCS主服务
 	boolean mWriteNotiDesp,mWriteNotiDespOk;
-	boolean mDisconnectReq;
 	private ArrayList<StateListener> mStateListeners=new ArrayList<StateListener>();
 	/** 连接状态的监听接口*/
 	public interface StateListener{
 		/** 连接状态改变时的回调  */
-		public void onStateChanged(int type,String state);
+		public void onStateChanged(int state);
 	}
 	
 	public ANCSGattCallback(Context c,ANCSParser ancs){
@@ -37,71 +41,56 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	public void addStateListen(StateListener sl){
 		if(!mStateListeners.contains(sl)){
 			mStateListeners.add(sl);
-			sl.onStateChanged(0,getState());
+			sl.onStateChanged(mBleState);
 		}
 	}
 
 	/** 不用时调用以释放资源 */
 	public void stop(){
 		log("stop connectGatt..");
-		mDisconnectReq = true;
-		mStateListeners.clear();
-		if(null!=mBluetoothGatt)
+		mBleState = BleDisconnect;
+		for(StateListener sl: mStateListeners){
+			sl.onStateChanged(mBleState);
+		}
+		if(null != mBluetoothGatt){
 			mBluetoothGatt.disconnect();
+			mBluetoothGatt.close();
+		}
+		mBluetoothGatt = null;
+		mBluetoothGattService = null;
+		mStateListeners.clear();
 	}
 
 	/** 设置btGatt， 应为 连接时 connectGatt() 的返回值为参数*/
 	public void setBluetoothGatt(BluetoothGatt BluetoothGatt) {
 		mBluetoothGatt = BluetoothGatt;
-		mDisconnectReq = false;
 	}
 	
-	private String getState() {
-		String  state="[unknown]" /*,OPresult="unknown"*/;
-		switch(mState){
-		case Disconnected:
-			state = "GATT [Disconnected]";
+	public String getState() {
+		String state = "[unknown]" ;
+		switch (mBleState) {
+		case BleDisconnect: // 0
+			state = "GATT [Disconnected]\n\n";
 			break;
-		case Disconnecting:
-			state ="[Disconnecting]";
+		case BleBuildStart: // 1
+			state = "waiting state change after connectGatt()\n\n";
 			break;
-		case Connected:
-			state = "GATT [Connected]";
+		case BleBuildConnectedGatt: // 2
+			state = "GATT [Connected]+\n\n";
 			break;
-		case Connecting:
-			state = "[Connecting]";
+		case BleBuildDiscoverService: // 3
+			state = "GATT [Connected]\n"+"discoverServices...\n";
+			break;
+		case BleBuildDiscoverOver: // 4
+			state = "GATT [Connected]\n"+"discoverServices OVER\n";
+			break;
+		case BleBuildSetingANCS: // 5
+			state = "GATT [Connected]\n"+"discoverServices OVER\n"+"setting ANCS...password";
+			break;
+		case BleAncsConnected: // 10
+			state = "GATT [Connected]\n"+"discoverServices OVER\n"+"ANCS[Connected] success !!";
 			break;
 		}
-//		switch(mStatus){
-//		case BluetoothGatt.GATT_SUCCESS:
-//			OPresult="[GATT_SUCCESS]";
-//			break;
-//		case BluetoothGatt.GATT_FAILURE:
-//			OPresult="[GATT_FAILURE]";
-//			break;
-//		case BluetoothGatt.GATT_INSUFFICIENT_AUTHENTICATION:
-//			OPresult="[INSUFFICIENT_AUTHENTICATION]";
-//			break;
-//		case BluetoothGatt.GATT_INSUFFICIENT_ENCRYPTION:
-//			OPresult="[INSUFFICIENT_ENCRYPTION]";
-//			break;
-//		case BluetoothGatt.GATT_INVALID_ATTRIBUTE_LENGTH:
-//			OPresult="[INVALID_ATTRIBUTE_LENGTH]";
-//			break;
-//		case BluetoothGatt.GATT_INVALID_OFFSET:
-//			OPresult="[INVALID_OFFSET]";
-//			break;
-//		case BluetoothGatt.GATT_READ_NOT_PERMITTED:
-//			OPresult="[READ_NOT_PERMITTED]";
-//			break;
-//		case BluetoothGatt.GATT_REQUEST_NOT_SUPPORTED:
-//			OPresult="[REQUEST_NOT_SUPPORTED]";
-//			break;
-//		case BluetoothGatt.GATT_WRITE_NOT_PERMITTED:
-//			OPresult="[WRITE_NOT_PERMITTED]";
-//			break;
-//		}
-
 		return state;
 	}
 	
@@ -119,7 +108,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			mANCSHandler.onNotification(data);
 		} else if (uuid.equals(GattConstant.Apple.sUUIDDataSource)) {
 			//收到来自 iphone端DS 的字节数据 data[]
-			log("收到来自 iphone端DS 的字节数据 {{ Tid: "+android.os.Process.myTid());
+//			log("收到来自 iphone端DS 的字节数据 {{ Tid: "+android.os.Process.myTid());
 			byte[] data = cha.getValue();
 			mANCSHandler.onDSNotification(data);
 		} else {
@@ -137,28 +126,23 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	public void onConnectionStateChange(BluetoothGatt gatt, int status,
 			int newState) {
 		log("onConnectionStateChange() " + status + "  " + newState);
-		mState = newState;
+		mBleState = newState;
+		for (StateListener sl : mStateListeners) {
+			sl.onStateChanged(mBleState);
+		}
 		if (newState == BluetoothProfile.STATE_CONNECTED
 				/*&& mBluetoothGattService == null*/) {
 			log("start discover service: ");
+			mBleState = BleBuildDiscoverService;
 			for(StateListener sl: mStateListeners){
-				sl.onStateChanged(1,"searching Services ON iphone...");
+				sl.onStateChanged(mBleState);
 			}
 			log(" discover service:  end "+mBluetoothGatt.discoverServices());
+			mBleState = BleBuildDiscoverOver;
 			for(StateListener sl: mStateListeners){
-				sl.onStateChanged(1,"search Services ON iphone OVER");
+				sl.onStateChanged(mBleState);
 			}
-		} else if (0 == newState && mDisconnectReq && mBluetoothGatt != null) {
-			log("bluetoothGatt.close() ...");
-			mBluetoothGatt.close();
-			mBluetoothGatt = null;
-			mBluetoothGattService = null;
-			mANCSHandler.setService(mBluetoothGattService, mBluetoothGatt);
-			// reconnect();
-		}
-		String state = getState();
-		for(StateListener sl: mStateListeners){
-			sl.onStateChanged(0,state);
+		} else if (0 == newState/* && mDisconnectReq*/ && mBluetoothGatt != null) {
 		}
 	}
 
@@ -168,34 +152,41 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		log("onDescriptorWrite() " + descriptor.getUuid() + " -> "
 				+ status);// 15-5 需要输入密码
 		if (15 == status || 5 == status) {
+			mBleState = BleBuildSetingANCS;//5
 			for (StateListener sl : mStateListeners) {
-				sl.onStateChanged(2, "need password");
+				sl.onStateChanged(mBleState);
 			}
 		}else if(133 == status)
 			Thread.dumpStack();
-		if(0==status&&mWriteNotiDesp&&mWriteNotiDespOk){
+		if (0 == status && mWriteNotiDesp && mWriteNotiDespOk) {
 			for (StateListener sl : mStateListeners) {
-				sl.onStateChanged(2, "connect ANCS success!");
+				mBleState = BleAncsConnected;
+				sl.onStateChanged(mBleState);
 			}
 		}
 		if (status == BluetoothGatt.GATT_SUCCESS && mBluetoothGattService != null
 				&& !mWriteNotiDesp) {
 			BluetoothGattCharacteristic cha = mBluetoothGattService
 					.getCharacteristic(GattConstant.Apple.sUUIDChaNotify);
-			if (cha == null
-					|| !mBluetoothGatt.setCharacteristicNotification(cha, true)) {
-				log("no Notify cha found " + cha);
+			if(cha == null){
+				log("can not find ANCS's NotificationSource cha");
+				return;
+			}
+			boolean registerNS=mBluetoothGatt.setCharacteristicNotification(cha, true);
+			if ( !registerNS) {
+				log(" Enable notifications/indications failed (NS) ");
+				return;
+			} 
+			BluetoothGattDescriptor desp = cha
+					.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
+			if (null != desp) {
+				desp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+				boolean r=mBluetoothGatt.writeDescriptor(desp);
+				log("write NS's descriptor2: " + r);
+				mWriteNotiDespOk = r;
 			} else {
-				BluetoothGattDescriptor desp = cha
-						.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
-				if (null != desp) {
-					desp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-					boolean r=mBluetoothGatt.writeDescriptor(desp);
-					log("write descriptor2: " + r);
-					mWriteNotiDespOk=r;
-				} else {
-					log("null descriptor2");
-				}
+				log("null descriptor2");
+				return;
 			}
 			mWriteNotiDesp = true;
 			return;
@@ -207,52 +198,49 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		log("onServicesDiscovered");
 		//得到远端设备(iphone)提供的GATT服务列表
 		List<BluetoothGattService> services = gatt.getServices();
-		if (services != null) {
-			for (BluetoothGattService svr : services) {
-				log("onServicesDiscovered: "+svr.getUuid());
-				if (svr.getUuid()
-						.equals(GattConstant.Apple.sUUIDANCService)) {
-					 /*发现了 iphone 的ANCS主服务:
-					 * 从主服务获取
-					 * DS的 Characteristic，和其descriptor，
-					 * CP的 characteristic
-					 * 保留 ANCS服务的‘指针’
-					 * 重设 ANCSHandler
-					 * return.
-					 */
-					BluetoothGattCharacteristic cha = svr
-							.getCharacteristic(GattConstant.Apple.sUUIDDataSource);
-					if (cha == null
-							|| !mBluetoothGatt.setCharacteristicNotification(cha,
-									true)) {
-						log("no DS cha found " + cha);
-						break;
-					} else {
-						BluetoothGattDescriptor descriptor = cha
-								.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
-						if (null != descriptor) {
-							descriptor
-									.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-							log("write ds desp: "
-									+ mBluetoothGatt.writeDescriptor(descriptor));
-						} else {
-							log("null ds desp");
-						}
-					}
-					mWriteNotiDespOk=mWriteNotiDesp = false;
-
-					cha = svr.getCharacteristic(GattConstant.Apple.sUUIDControl);
-					if (cha == null) {
-						log("no control cha found");
-					}
-
-					mBluetoothGattService = svr;
-					mANCSHandler.setService(svr, mBluetoothGatt);
-					
-					ANCSParser.get().reset();
-					log("found ANCS service & character OK!");
-					return;
+		if (services == null) 
+			return;
+		for (BluetoothGattService svr : services) {
+			log("onServicesDiscovered: " + svr.getUuid());
+			if (svr.getUuid().equals(GattConstant.Apple.sUUIDANCService)) {
+				/*
+				 * 发现了 iphone 的ANCS主服务: 从主服务获取 DS的 Characteristic，和其descriptor，
+				 * CP的 characteristic 保留 ANCS服务的‘指针’ 重设 ANCSHandler return.
+				 */
+				BluetoothGattCharacteristic cha = svr.getCharacteristic(GattConstant.Apple.sUUIDDataSource);
+				if(cha == null){
+					log("can not find ANCS's DataSource characteristic");
+					break;
 				}
+				boolean registerDS=mBluetoothGatt.setCharacteristicNotification(cha,true);
+				if ( !registerDS) {
+					log(" Enable notifications/indications failed. (DS)");
+					break;
+				} 
+				BluetoothGattDescriptor descriptor = cha
+						.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
+				//Value used to enable notification for a client configuration descriptor
+				if (null != descriptor) {
+					boolean r=descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+					boolean rr=mBluetoothGatt.writeDescriptor(descriptor);
+					log("Descriptor.setValue(): "+r+",then BluetoothGatt writeDescriptor(): " +rr);
+				} else {
+					log("can not find descriptor from ANCS's DataSource");
+				}
+				
+				mWriteNotiDespOk = mWriteNotiDesp = false;
+
+				cha = svr.getCharacteristic(GattConstant.Apple.sUUIDControl);
+				if (cha == null) {
+					log("can not find ANCS's ControlPoint cha ");
+				}
+
+				mBluetoothGattService = svr;
+				mANCSHandler.setService(svr, mBluetoothGatt);
+
+				ANCSParser.get().reset();
+				log("found ANCS service & character OK!");
+				return;
 			}
 		}
 		log("bad service found; not find ANCS uuid");
