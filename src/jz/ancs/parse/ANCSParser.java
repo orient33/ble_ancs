@@ -280,11 +280,9 @@ public class ANCSParser {
 					break;
 				}
 				// get attribute if needed!
-				BluetoothGattCharacteristic cha2 = mService	//获取DS
-						.getCharacteristic(GattConstant.Apple.sUUIDDataSource);
 				BluetoothGattCharacteristic cha = mService	//获取CP
 						.getCharacteristic(GattConstant.Apple.sUUIDControl);
-				if (null != cha && null != cha2) {
+				if (null != cha ) {
 					ByteArrayOutputStream bout = new ByteArrayOutputStream();
 					// 组装 请求通知属性 的数据
 					// command ，commandID， 固定为0，
@@ -322,7 +320,7 @@ public class ANCSParser {
 
 					cha.setValue(data);// 设置data到characteristic
 
-					IOSNotification.log("request ANCS the data of Notification. ？= "
+					IOSNotification.log("request ANCS(CP) the data of Notification. ？= "
 							+ mGatt.writeCharacteristic(cha));//发起 请求
 					mCurData.curStep = 1;	//	状态(步骤设置为1)
 					mCurData.bout = new ByteArrayOutputStream();
@@ -331,7 +329,7 @@ public class ANCSParser {
 //					mHandler.sendEmptyMessageDelayed(MSG_CHECK_TIME, TIMEOUT);
 					return;
 				} else {
-					IOSNotification.logw("ANCS No Control & DS!");
+					IOSNotification.logw("ANCS has No Control Point !");
 					// has no control!// just vibrate ...
 					mCurData.bout = null;
 					mCurData.curStep = 1;

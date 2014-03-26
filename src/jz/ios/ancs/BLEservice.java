@@ -4,6 +4,7 @@ import jz.ancs.parse.ANCSGattCallback;
 import jz.ancs.parse.ANCSGattCallback.StateListener;
 import jz.ancs.parse.ANCSParser;
 import jz.ancs.parse.IOSNotification;
+import android.annotation.SuppressLint;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
@@ -13,6 +14,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences.Editor;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -34,7 +36,8 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
             return BLEservice.this;
         }
     }
-    private Handler mHandler = new Handler(){
+    @SuppressLint("HandlerLeak")
+	private Handler mHandler = new Handler(){
     	@Override
     	public void handleMessage(Message msg){
 			switch (msg.what) {
@@ -88,6 +91,9 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 		Devices.log(TAG+" onDestroy()");
 		mANCScb.stop();
 		unregisterReceiver(mBtOnOffReceiver);
+		Editor e =getSharedPreferences(Devices.PREFS_NAME, 0).edit();
+		e.putInt(Devices.BleStateKey, ANCSGattCallback.BleDisconnect);
+		e.commit();
 		super.onDestroy();
 	}
 
@@ -122,6 +128,7 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 		mANCSHandler.listenIOSNotification(this);
 		mBluetoothGatt = dev.connectGatt(this, auto, mANCScb);
 		mANCScb.setBluetoothGatt(mBluetoothGatt);
+		mANCScb.setStateStart();
 	}
 
 	public void registerStateChanged(StateListener sl) {

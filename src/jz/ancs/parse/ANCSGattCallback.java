@@ -1,7 +1,6 @@
 package jz.ancs.parse;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 import android.bluetooth.BluetoothGatt;
@@ -25,8 +24,8 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	public static 
 	ANCSParser mANCSHandler;
 	private BluetoothGatt mBluetoothGatt;
-	BluetoothGattService mBluetoothGattService;//连 ANCS主服务
-	boolean mWriteNotiDesp,mWriteNotiDespOk;
+	BluetoothGattService mANCSservice;//连 ANCS主服务
+	boolean mWritedNS,mWriteNS_DespOk;
 	private ArrayList<StateListener> mStateListeners=new ArrayList<StateListener>();
 	/** 连接状态的监听接口*/
 	public interface StateListener{
@@ -57,7 +56,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			mBluetoothGatt.close();
 		}
 		mBluetoothGatt = null;
-		mBluetoothGattService = null;
+		mANCSservice = null;
 		mStateListeners.clear();
 	}
 
@@ -66,6 +65,13 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		mBluetoothGatt = BluetoothGatt;
 	}
 	
+	public void setStateStart(){
+		mBleState = BleBuildStart;
+		for (StateListener sl : mStateListeners) {
+			sl.onStateChanged(mBleState);
+		}
+	}
+
 	public String getState() {
 		String state = "[unknown]" ;
 		switch (mBleState) {
@@ -76,7 +82,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			state = "waiting state change after connectGatt()\n\n";
 			break;
 		case BleBuildConnectedGatt: // 2
-			state = "GATT [Connected]+\n\n";
+			state = "GATT [Connected]\n\n";
 			break;
 		case BleBuildDiscoverService: // 3
 			state = "GATT [Connected]\n"+"discoverServices...\n";
@@ -93,7 +99,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		}
 		return state;
 	}
-	
+
 	void log(String s){
 		IOSNotification.log(s);
 	}
@@ -116,13 +122,6 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	}
 
 	@Override
-	public void onCharacteristicWrite(BluetoothGatt gatt,
-			BluetoothGattCharacteristic characteristic, int status) {
-		log("onCharacteristicWrite()" + status);
-		mANCSHandler.onWrite(characteristic, status);
-	}
-
-	@Override
 	public void onConnectionStateChange(BluetoothGatt gatt, int status,
 			int newState) {
 		log("onConnectionStateChange() " + status + "  " + newState);
@@ -131,7 +130,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 			sl.onStateChanged(mBleState);
 		}
 		if (newState == BluetoothProfile.STATE_CONNECTED
-				/*&& mBluetoothGattService == null*/) {
+				&& status == BluetoothGatt.GATT_SUCCESS) {
 			log("start discover service: ");
 			mBleState = BleBuildDiscoverService;
 			for(StateListener sl: mStateListeners){
@@ -146,104 +145,95 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 		}
 	}
 
+	@Override	// New services discovered
+	public void onServicesDiscovered(BluetoothGatt gatt, int status) {
+		log("onServicesDiscovered() status=" + status);
+		BluetoothGattService ancs = gatt.getService(GattConstant.Apple.sUUIDANCService);
+		if (ancs == null) {
+			log("bad services found; not find ANCS uuid");
+			return;
+		}
+		log("find ANCS service !");
+		/*
+		 * 发现了 iphone 的ANCS主服务: 从主服务获取并设置DS的Characteristic，和其descriptor.
+		 * 重设 ANCSHandler .
+		 */
+		BluetoothGattCharacteristic DScha = ancs.getCharacteristic(GattConstant.Apple.sUUIDDataSource);
+		if (DScha == null) {
+			log("can not find DataSource(DS) characteristic");
+			return;
+		}
+		boolean registerDS = mBluetoothGatt.setCharacteristicNotification(DScha,true);
+		if (!registerDS) {
+			log(" Enable (DS) notifications failed. ");
+			return;
+		}
+		BluetoothGattDescriptor descriptor = DScha.getDescriptor(GattConstant.DESCRIPTOR_UUID);
+		if (null != descriptor) {
+			boolean r = descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+			boolean rr = mBluetoothGatt.writeDescriptor(descriptor);
+			log("(DS)Descriptor.setValue(): " + r + ",writeDescriptor(): " + rr);
+		} else {
+			log("can not find descriptor from (DS)");
+		}
+		mWriteNS_DespOk = mWritedNS = false;
+		DScha = ancs.getCharacteristic(GattConstant.Apple.sUUIDControl);
+		if (DScha == null) {
+			log("can not find ANCS's ControlPoint cha ");
+		}
+		
+		mANCSservice = ancs;
+		mANCSHandler.setService(ancs, mBluetoothGatt);
+		ANCSParser.get().reset();
+		log("found ANCS service & set DS character,descriptor OK !");
+	}
+
 	@Override//the result of a descriptor write operation.
 	public void onDescriptorWrite(BluetoothGatt gatt,
 			BluetoothGattDescriptor descriptor, int status) {
-		log("onDescriptorWrite() " + descriptor.getUuid() + " -> "
+
+		log("onDescriptorWrite() " + GattConstant.getNameforUUID(descriptor.getUuid()) + " -> "
 				+ status);// 15-5 需要输入密码
 		if (15 == status || 5 == status) {
 			mBleState = BleBuildSetingANCS;//5
 			for (StateListener sl : mStateListeners) {
 				sl.onStateChanged(mBleState);
 			}
-		}else if(133 == status)
-			Thread.dumpStack();
-		if (0 == status && mWriteNotiDesp && mWriteNotiDespOk) {
+			return;
+		}
+		if (status != BluetoothGatt.GATT_SUCCESS)
+			return;
+		// status is 0, SUCCESS. 
+		if (mWritedNS && mWriteNS_DespOk) {
 			for (StateListener sl : mStateListeners) {
 				mBleState = BleAncsConnected;
 				sl.onStateChanged(mBleState);
 			}
 		}
-		if (status == BluetoothGatt.GATT_SUCCESS && mBluetoothGattService != null
-				&& !mWriteNotiDesp) {
-			BluetoothGattCharacteristic cha = mBluetoothGattService
+		if (mANCSservice != null && !mWritedNS) {	// set NS
+			mWritedNS = true;
+			BluetoothGattCharacteristic cha = mANCSservice
 					.getCharacteristic(GattConstant.Apple.sUUIDChaNotify);
-			if(cha == null){
-				log("can not find ANCS's NotificationSource cha");
+			if (cha == null) {
+				log("can not find ANCS's NS cha");
 				return;
 			}
-			boolean registerNS=mBluetoothGatt.setCharacteristicNotification(cha, true);
-			if ( !registerNS) {
-				log(" Enable notifications/indications failed (NS) ");
+			boolean registerNS = mBluetoothGatt.setCharacteristicNotification(
+					cha, true);
+			if (!registerNS) {
+				log(" Enable (NS) notifications failed  ");
 				return;
-			} 
-			BluetoothGattDescriptor desp = cha
-					.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
+			}
+			BluetoothGattDescriptor desp = cha.getDescriptor(GattConstant.DESCRIPTOR_UUID);
 			if (null != desp) {
-				desp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-				boolean r=mBluetoothGatt.writeDescriptor(desp);
-				log("write NS's descriptor2: " + r);
-				mWriteNotiDespOk = r;
+				boolean r=desp.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+				boolean rr = mBluetoothGatt.writeDescriptor(desp);
+				mWriteNS_DespOk = rr;
+				log("(NS)Descriptor.setValue(): " + r + ",writeDescriptor(): " + rr);
 			} else {
-				log("null descriptor2");
-				return;
+				log("null descriptor");
 			}
-			mWriteNotiDesp = true;
-			return;
 		}
 	}
 
-	@Override	// New services discovered
-	public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-		log("onServicesDiscovered");
-		//得到远端设备(iphone)提供的GATT服务列表
-		List<BluetoothGattService> services = gatt.getServices();
-		if (services == null) 
-			return;
-		for (BluetoothGattService svr : services) {
-			log("onServicesDiscovered: " + svr.getUuid());
-			if (svr.getUuid().equals(GattConstant.Apple.sUUIDANCService)) {
-				/*
-				 * 发现了 iphone 的ANCS主服务: 从主服务获取 DS的 Characteristic，和其descriptor，
-				 * CP的 characteristic 保留 ANCS服务的‘指针’ 重设 ANCSHandler return.
-				 */
-				BluetoothGattCharacteristic cha = svr.getCharacteristic(GattConstant.Apple.sUUIDDataSource);
-				if(cha == null){
-					log("can not find ANCS's DataSource characteristic");
-					break;
-				}
-				boolean registerDS=mBluetoothGatt.setCharacteristicNotification(cha,true);
-				if ( !registerDS) {
-					log(" Enable notifications/indications failed. (DS)");
-					break;
-				} 
-				BluetoothGattDescriptor descriptor = cha
-						.getDescriptor(GattConstant.CHARACTERISTIC_UPDATE_NOTIFICATION_DESCRIPTOR_UUID);
-				//Value used to enable notification for a client configuration descriptor
-				if (null != descriptor) {
-					boolean r=descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-					boolean rr=mBluetoothGatt.writeDescriptor(descriptor);
-					log("Descriptor.setValue(): "+r+",then BluetoothGatt writeDescriptor(): " +rr);
-				} else {
-					log("can not find descriptor from ANCS's DataSource");
-				}
-				
-				mWriteNotiDespOk = mWriteNotiDesp = false;
-
-				cha = svr.getCharacteristic(GattConstant.Apple.sUUIDControl);
-				if (cha == null) {
-					log("can not find ANCS's ControlPoint cha ");
-				}
-
-				mBluetoothGattService = svr;
-				mANCSHandler.setService(svr, mBluetoothGatt);
-
-				ANCSParser.get().reset();
-				log("found ANCS service & character OK!");
-				return;
-			}
-		}
-		log("bad service found; not find ANCS uuid");
-//		stop();
-	}
 }
