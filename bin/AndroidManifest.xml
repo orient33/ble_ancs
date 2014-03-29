@@ -33,6 +33,7 @@
 		    android:theme="@android:style/Theme.Dialog"></activity>
         <service android:name=".BLEservice" >
         </service>
+        <service  android:name="jz.ancs.exposed.ExposedService" />
 
     </application>
 

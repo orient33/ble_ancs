@@ -133,7 +133,8 @@ public class Devices extends ListActivity {
 		SharedPreferences sp=this.getSharedPreferences(PREFS_NAME, 0);
 		int ble_state=sp.getInt(BleStateKey, 0);
 		log("read ble state : "+ble_state);
-		if(ANCSGattCallback.BleDisconnect != ble_state){
+//		if(ANCSGattCallback.BleDisconnect != ble_state){
+		if( ble_state > -1){ //must be 
 			boolean auto = sp.getBoolean(BleAutoKey, true);
 			String addr = sp.getString(BleAddrKey, "");
 			Intent intent = new Intent(this,  BLEConnect.class);

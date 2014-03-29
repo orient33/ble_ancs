@@ -122,6 +122,9 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 	//** public method , for client to call
 	public void startBleConnect(String addr, boolean auto) {
 		Devices.log(TAG+" startBleConnect() iPhone addr = "+addr);
+		if(mANCScb.mBleState!=0){
+			mANCScb.stop();
+		}
 		mAuto = auto;
 		this.addr = addr;
 		BluetoothDevice dev = BluetoothAdapter.getDefaultAdapter().getRemoteDevice(addr);

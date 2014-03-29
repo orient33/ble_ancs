@@ -1,5 +1,6 @@
 package jz.ios.ancs;
 
+import jz.ancs.exposed.ExposedService;
 import jz.ancs.parse.ANCSGattCallback;
 import jz.ancs.parse.ANCSGattCallback.StateListener;
 import jz.ios.ancs.BLEservice.MyBinder;
@@ -29,7 +30,7 @@ public class BLEConnect extends Activity implements StateListener{
 	TextView mViewState;
 	CheckBox mExitService;
 	BLEservice mBLEservice;
-	Intent mIntent;
+	Intent mIntent, mEcposedIntent;
 	int mCachedState;
 	BroadcastReceiver mBtOnOffReceiver;
 	@Override
@@ -59,17 +60,28 @@ public class BLEConnect extends Activity implements StateListener{
 		mIntent.putExtra("addr", addr);
 		mIntent.putExtra("auto", mAuto);
 		startService(mIntent);
-		if (!BluetoothAdapter.checkBluetoothAddress(addr)) {
-			finish();
-			return;
-		}
+
+		mEcposedIntent=new Intent(this,ExposedService.class);
+		startService(mEcposedIntent);
+//		if (!BluetoothAdapter.checkBluetoothAddress(addr)) {
+//			finish();
+//			return;
+//		}
 		mBtOnOffReceiver = new BroadcastReceiver() {
 			public void onReceive(Context arg0, Intent i) {
 				// action must be bt on/off .
-				int state = i.getIntExtra(BluetoothAdapter.EXTRA_STATE,
-						BluetoothAdapter.ERROR);
-				if (state != BluetoothAdapter.STATE_ON) {
-					finish();
+				String act = i.getAction();
+				if (act.equals(BluetoothAdapter.ACTION_STATE_CHANGED)) {
+					int state = i.getIntExtra(BluetoothAdapter.EXTRA_STATE,
+							BluetoothAdapter.ERROR);
+					if (state != BluetoothAdapter.STATE_ON) {
+						finish();
+					}
+				} else if (act.equals(ExposedService.CON_ACION)) {
+					addr= i.getStringExtra("addr");
+					log("received :connected. use addr to connectGatt(),addr "+addr);
+					mAuto = true;
+					startConnectGatt();
 				}
 			}
 		};
@@ -79,6 +91,7 @@ public class BLEConnect extends Activity implements StateListener{
 		super.onStart();
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);// bt on/off
+		filter.addAction(ExposedService.CON_ACION); // when iPhone connected Watch.
 		registerReceiver(mBtOnOffReceiver, filter);
 	}
 	@Override
@@ -92,6 +105,7 @@ public class BLEConnect extends Activity implements StateListener{
 		unbindService(conn);
 		if ( mExitService.isChecked()) {
 			stopService(mIntent);
+			stopService(mEcposedIntent);
 		}
 		super.onStop();
 	}
@@ -104,7 +118,8 @@ public class BLEConnect extends Activity implements StateListener{
 			MyBinder b = (MyBinder) binder;
 			mBLEservice = b.getService();
 			mBond = true;
-			startConnectGatt();
+//			startConnectGatt();//now not connect ,
+			// I am waiting for ExposedService addr to connectGatt()
 		}
 
 		@Override
@@ -130,7 +145,7 @@ public class BLEConnect extends Activity implements StateListener{
 		edit.putInt(Devices.BleStateKey, state);
 		edit.putString(Devices.BleAddrKey, addr);
 		edit.putBoolean(Devices.BleAutoKey, mAuto);
-		edit.commit();
+//		edit.commit();
 //		log("put state : "+state);
 		runOnUiThread(new Runnable() {
 			public void run() {

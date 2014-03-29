@@ -124,7 +124,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	@Override
 	public void onConnectionStateChange(BluetoothGatt gatt, int status,
 			int newState) {
-		log("onConnectionStateChange() " + status + "  " + newState);
+		log("onConnectionStateChange() " + status + "  " + newState+", Tid="+android.os.Process.myTid());
 		mBleState = newState;
 		for (StateListener sl : mStateListeners) {
 			sl.onStateChanged(mBleState);
@@ -148,6 +148,7 @@ public class ANCSGattCallback extends BluetoothGattCallback {
 	@Override	// New services discovered
 	public void onServicesDiscovered(BluetoothGatt gatt, int status) {
 		log("onServicesDiscovered() status=" + status);
+		if(status != 0 ) return;
 		BluetoothGattService ancs = gatt.getService(GattConstant.Apple.sUUIDANCService);
 		if (ancs == null) {
 			log("bad services found; not find ANCS uuid");
