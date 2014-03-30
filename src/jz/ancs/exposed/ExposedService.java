@@ -14,7 +14,6 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.Intent;
-import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
@@ -132,9 +131,10 @@ public class ExposedService extends Service {
 	private class SimulatorHandler extends Handler {
 		@Override
 		public void handleMessage(Message msg) {
-			if (msg.what == 1) {
+			switch (msg.what) {
+			case 1:
 				if (mConnectionState == BluetoothProfile.STATE_CONNECTED) {
-//					stopExposed();
+					// stopExposed();
 					Intent i = new Intent();
 					// i.setClassName("jz.ios.ancs", "BLEConnect");
 					i.setAction(CON_ACION);
@@ -142,32 +142,32 @@ public class ExposedService extends Service {
 					log("send addr to BLEConnect. with addr ");
 					mContext.sendBroadcast(i);
 				}
-				return;
-			}
-			mHeartRate++;
-			if (mHeartRate > 90) {
-				mHeartRate = 62;
-			}
+				break;
+			case 0:
+				mHeartRate++;
+				if (mHeartRate > 90) {
+					mHeartRate = 62;
+				}
+				if (sGattServer != null
+						&& mConnectionState == BluetoothProfile.STATE_CONNECTED
+						&& mBluetoothDevice != null) {
+					BluetoothGattCharacteristic characteristic = mBluetoothGattCharacteristic;
+					int num = mHeartRate;
+					byte[] value = transToBytes(num);
 
-			if (sGattServer != null
-					&& mConnectionState == BluetoothProfile.STATE_CONNECTED
-					&& mBluetoothDevice != null) {
-
-				BluetoothGattCharacteristic characteristic = mBluetoothGattCharacteristic;
-				int num = mHeartRate;
-				byte[] value = transToBytes(num);
-
-				characteristic.setValue(value);
-				boolean r=sGattServer.notifyCharacteristicChanged(mBluetoothDevice,
-						characteristic, false);
-				log("notifyCharacteristicChanged() result="+r);
-			}else {
-				log("notifyCharacteristicChanged() "+sGattServer+"; "+mConnectionState +" , "+mBluetoothDevice);
-			}
-			Message mymsg = obtainMessage(0);
-//			if (mConnectionState == BluetoothProfile.STATE_CONNECTED)
+					characteristic.setValue(value);
+					boolean r = sGattServer.notifyCharacteristicChanged(
+							mBluetoothDevice, characteristic, false);
+					log("notifyCharacteristicChanged() result=" + r);
+				} else {
+					log("notifyCharacteristicChanged() " + sGattServer + "; "
+							+ mConnectionState + " , " + mBluetoothDevice);
+				}
+				Message mymsg = obtainMessage(0);
+				// if (mConnectionState == BluetoothProfile.STATE_CONNECTED)
 				sendMessageDelayed(mymsg, 30000);
-
+				break;
+			}
 		}
 	}
 
@@ -229,6 +229,7 @@ public class ExposedService extends Service {
 					+ newState + ",device -- " + device.getAddress());
 			if (status == BluetoothGatt.GATT_SUCCESS
 					&& newState == BluetoothProfile.STATE_CONNECTED) {
+				mSimulatorHandler.removeMessages(1);
 				mSimulatorHandler.sendEmptyMessageDelayed(1, 5000);
 			}
 		}

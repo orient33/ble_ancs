@@ -21,7 +21,8 @@ import android.os.IBinder;
 import android.os.Message;
 import android.support.v4.app.NotificationCompat;
 
-public class BLEservice extends Service implements ANCSParser.onIOSNotification{
+public class BLEservice extends Service implements ANCSParser.onIOSNotification
+		, ANCSGattCallback.StateListener{
 	private static final String TAG="BLEservice]]";
 	private final IBinder mBinder = new MyBinder();
 	private ANCSParser mANCSHandler;
@@ -30,6 +31,7 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 	BroadcastReceiver mBtOnOffReceiver;
 	boolean mAuto;
 	String addr;
+	int mBleANCS_state = 0;
     public class MyBinder extends Binder {
     	BLEservice getService() {
             // Return this instance  so clients can call public methods
@@ -122,7 +124,8 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 	//** public method , for client to call
 	public void startBleConnect(String addr, boolean auto) {
 		Devices.log(TAG+" startBleConnect() iPhone addr = "+addr);
-		if(mANCScb.mBleState!=0){
+		if (mBleANCS_state != 0) {
+			Devices.log("stop ancs, then restart it!!");
 			mANCScb.stop();
 		}
 		mAuto = auto;
@@ -137,12 +140,19 @@ public class BLEservice extends Service implements ANCSParser.onIOSNotification{
 	public void registerStateChanged(StateListener sl) {
 		if (null != sl)
 			mANCScb.addStateListen(sl);
+		mANCScb.addStateListen(this);
 	}
 	public void connect(){
 		if (!mAuto)
 			mBluetoothGatt.connect();
 	}
+	
 	public String getStateDes(){
 		return mANCScb.getState();
+	}
+	
+	@Override
+	public void onStateChanged(int state) {
+		mBleANCS_state = state;
 	}
 }
